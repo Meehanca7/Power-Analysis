@@ -3,8 +3,12 @@ import multiprocessing as mp
 from functools import partial
 import numpy as np
 from scipy.stats import poisson
+import warnings
 from statsmodels.stats.power import TTestIndPower
 from tqdm import tqdm  # For progress bar
+
+# Filter out convergence warnings from statsmodels.stats.power
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels.stats.power")
 
 def perform_power_analysis(params):
     skew_scale, n_structures, structure_id, alpha_level, power_level, prob_structure, total_reads = params
@@ -18,7 +22,9 @@ def perform_power_analysis(params):
     required_sample_sizes = []
 
     for effect_size in effect_sizes:
-        sample_size = analysis.solve_power(effect_size=effect_size, nobs1=None, alpha=alpha_level, power=power_level, ratio=1)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            sample_size = analysis.solve_power(effect_size=effect_size, nobs1=None, alpha=alpha_level, power=power_level, ratio=1)
         required_sample_sizes.append(sample_size)
 
     # Find the minimum required sample size
@@ -99,7 +105,7 @@ if __name__ == '__main__':
     # Perform power analysis for each parameter combination using multiprocessing
     pool = mp.Pool()
     perform_power_analysis_partial = partial(perform_power_analysis)
-    results = list(tqdm(pool.imap(perform_power_analysis_partial, param_combos), total=len(param_combos), desc='Performing power analysis'))
+    results = list(tqdm(pool.imap(perform_power_analysis_partial, param_combos), total=len(param_combos), desc='Performing power analysis', disable=False))
     pool.close()
     pool.join()
 
