@@ -98,7 +98,8 @@ if __name__ == '__main__':
 
     # Perform power analysis for each parameter combination using multiprocessing
     pool = mp.Pool()
-    results = list(tqdm(pool.imap(perform_power_analysis, param_combos), total=len(param_combos), desc='Performing power analysis'))
+    perform_power_analysis_partial = partial(perform_power_analysis)
+    results = list(tqdm(pool.imap(perform_power_analysis_partial, param_combos), total=len(param_combos), desc='Performing power analysis'))
     pool.close()
     pool.join()
 
