@@ -7,6 +7,7 @@ from statsmodels.stats.power import TTestIndPower
 from multiprocessing import Pool
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
+from tqdm import tqdm
 
 warnings.filterwarnings('ignore', category=ConvergenceWarning)
 
@@ -64,17 +65,9 @@ def param_combinations(skew_scales, unique_structures, alpha_levels, power_level
                         reads_per_structure_counter_target)
 
 
-def process_batch(batch):
-    results = []
-    for params in batch:
-        result = perform_power_analysis(params)
-        results.append(result)
-    return results
-
-
 if __name__ == '__main__':
     # Change the working directory
-    os.chdir('/Users/cathalmeehan/Documents/Power_analysis')
+    os.chdir('./')
 
     # Define the range of parameters
     unique_structures = [1000, 5000, 10000, 25000, 50000, 100000, 125000, 150000, 200000]
@@ -86,28 +79,21 @@ if __name__ == '__main__':
     total_reads_target = 10000000
     total_reads_counter_target = 10000000
 
-    # Create a multiprocessing pool
-    pool = Pool()
+    # Create a multiprocessing pool with 32 processes
+    pool = Pool(processes=32)
 
     # Generate parameter combinations using the generator
     param_combos = param_combinations(skew_scales, unique_structures, alpha_levels, power_levels, total_reads_target,
                                       total_reads_counter_target)
 
-    # Process results in batches
-    batch_size = 10000
+    # Process results using imap_unordered
     results = []
-    batch = []
-    for params in param_combos:
-        batch.append(params)
-        if len(batch) == batch_size:
-            batch_results = pool.map(perform_power_analysis, batch)
-            results.extend(batch_results)
-            batch = []
-
-    # Process any remaining parameters in the last batch
-    if batch:
-        batch_results = pool.map(perform_power_analysis, batch)
-        results.extend(batch_results)
+    with tqdm(
+            total=len(skew_scales) * len(unique_structures) * len(alpha_levels) * len(power_levels) * unique_structures[
+                -1]) as pbar:
+        for result in pool.imap_unordered(perform_power_analysis, param_combos):
+            results.append(result)
+            pbar.update()
 
     # Close the multiprocessing pool
     pool.close()
