@@ -6,6 +6,7 @@ from scipy.stats import norm
 import warnings
 from statsmodels.stats.power import TTestIndPower
 from tqdm import tqdm
+import psutil
 
 # Filter out convergence warnings from statsmodels.stats.power
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels.stats.power")
@@ -100,40 +101,81 @@ def aggregate_results(results, skew_scales, unique_structures, alpha_levels, pow
 
     return aggregate_results
 
+def get_available_memory():
+    mem = psutil.virtual_memory()
+    available_memory_gb = mem.available / (1024 ** 3)
+    return available_memory_gb
+
+def adjust_batch_size(batch_size, available_memory_gb):
+    memory_per_process = 0.5  # Adjust this value based on your observations
+    max_processes = int(available_memory_gb // memory_per_process)
+    adjusted_batch_size = max(1, min(batch_size, max_processes))
+    return adjusted_batch_size
+
 if __name__ == '__main__':
     total_reads = 1e7  # 10 million observations
     total_possible_structures = 16.8e6  # 16.8 million possible structures
 
-    skew_scales = [1,2,5,10,25,50]
-    unique_structures = [1000, 5000, 10000, 25000, 50000, 100000, 125000, 150000, 200000]
+    skew_scales = [1, 2, 5, 10, 25, 50, 100, 250, 1000]
+    unique_structures = [1000, 5000, 10000, 25000, 50000, 100000, 125000, 150000, 200000, 250000, 300000]
     alpha_levels = [0.01, 0.05, 0.1]
     power_levels = [0.8, 0.85, 0.9, 0.95]
-    effect_sizes = [0.5, 1, 2, 5, 10]  # Specify the desired effect size
+    effect_sizes = [0.5, 1, 2, 5, 10, 25, 50]  # Specify the desired effect size
 
-    # Generate parameter combinations
-    param_combos = list(param_combinations(skew_scales, unique_structures, alpha_levels, power_levels, total_reads, effect_sizes))
+    # Generate parameter combinations as a generator
+    param_combos = param_combinations(skew_scales, unique_structures, alpha_levels, power_levels, total_reads, effect_sizes)
 
-    # Create a pool of 32 processes
-    pool = mp.Pool(processes=32)
+    # Create a pool of processes
+    num_processes = mp.cpu_count()
+    pool = mp.Pool(processes=num_processes)
 
-    # Perform power analysis for each parameter combination using multiprocessing
-    perform_power_analysis_partial = partial(perform_power_analysis)
-    results = list(tqdm(pool.imap(perform_power_analysis_partial, param_combos), total=len(param_combos), desc='Performing power analysis', disable=False))
+    # Process results in batches
+    batch_size = 10000
+    results = []
+
+    available_memory_gb = get_available_memory()
+    adjusted_batch_size = adjust_batch_size(batch_size, available_memory_gb)
+    print(f"Adjusted batch size: {adjusted_batch_size}")
+
+    for batch in tqdm(pool.imap(perform_power_analysis, param_combos, chunksize=adjusted_batch_size), desc='Performing power analysis', disable=False):
+        results.extend(batch)
+
+        if len(results) >= adjusted_batch_size:
+            # Write individual results to CSV
+            with open('individual_results.csv', 'a', newline='') as csvfile:
+                fieldnames = ['Skew Scale', 'Structure ID', 'Unique Structures', 'Alpha', 'Power', 'Probability of Structure',
+                              'Expected Observations', 'Minimum Required Sample Size', 'Effect Size', 'Z-Score']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                if csvfile.tell() == 0:  # Write header only if the file is empty
+                    writer.writeheader()
+                writer.writerows(results)
+
+            results = []  # Clear the results list for the next batch
+
+            # Check available memory and adjust batch size if necessary
+            available_memory_gb = get_available_memory()
+            adjusted_batch_size = adjust_batch_size(batch_size, available_memory_gb)
+            print(f"Adjusted batch size: {adjusted_batch_size}")
+
+    # Write any remaining results to CSV
+    if results:
+        with open('individual_results.csv', 'a', newline='') as csvfile:
+            fieldnames = ['Skew Scale', 'Structure ID', 'Unique Structures', 'Alpha', 'Power', 'Probability of Structure',
+                          'Expected Observations', 'Minimum Required Sample Size', 'Effect Size', 'Z-Score']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            if csvfile.tell() == 0:  # Write header only if the file is empty
+                writer.writeheader()
+            writer.writerows(results)
+
     pool.close()
     pool.join()
 
-    # Write individual results to CSV
-    with open('individual_results.csv', 'w', newline='') as csvfile:
-        fieldnames = ['Skew Scale', 'Structure ID', 'Unique Structures', 'Alpha', 'Power', 'Probability of Structure',
-                      'Expected Observations', 'Minimum Required Sample Size', 'Effect Size', 'Z-Score']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-        writer.writeheader()
-        for result in results:
-            writer.writerow(result)
+    # Aggregate results
+    aggregated_results = aggregate_results(results, skew_scales, unique_structures, alpha_levels, power_levels, effect_sizes)
 
     # Write aggregated results to CSV
-    aggregated_results = aggregate_results(results, skew_scales, unique_structures, alpha_levels, power_levels, effect_sizes)
     with open('aggregated_results.csv', 'w', newline='') as csvfile:
         fieldnames = ['Skew Scale', 'Unique Structures', 'Alpha', 'Power', 'Effect Size',
                       'Min Required Sample Size 5th Percentile', 'Min Required Sample Size 25th Percentile',
