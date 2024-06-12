@@ -4,7 +4,6 @@ from functools import partial
 import numpy as np
 from scipy.stats import norm
 import warnings
-from statsmodels.stats.power import TTestIndPower
 from tqdm import tqdm
 import psutil
 
@@ -43,6 +42,7 @@ def perform_power_analysis(params):
     }
 
 def param_combinations(skew_scales, unique_structures, alpha_levels, power_levels, total_reads, effect_sizes):
+    combinations = []
     for skew_scale in skew_scales:
         for n_structures in unique_structures:
             # Generate skew values for each structure
@@ -55,7 +55,8 @@ def param_combinations(skew_scales, unique_structures, alpha_levels, power_level
                 for alpha_level in alpha_levels:
                     for power_level in power_levels:
                         for effect_size in effect_sizes:
-                            yield (skew_scale, n_structures, structure_id, alpha_level, power_level, prob_structure, total_reads, effect_size)
+                            combinations.append((skew_scale, n_structures, structure_id, alpha_level, power_level, prob_structure, total_reads, effect_size))
+    return combinations
 
 def aggregate_results(results, skew_scales, unique_structures, alpha_levels, power_levels, effect_sizes):
     aggregate_results = []
@@ -122,8 +123,11 @@ if __name__ == '__main__':
     power_levels = [0.8, 0.85, 0.9, 0.95]
     effect_sizes = [0.5, 1, 2, 5, 10, 25, 50]  # Specify the desired effect size
 
-    # Generate parameter combinations as a generator
+    # Generate parameter combinations
     param_combos = param_combinations(skew_scales, unique_structures, alpha_levels, power_levels, total_reads, effect_sizes)
+
+    # Calculate the total number of iterations
+    total_iterations = sum(len(unique_structures) * len(skew_scales) * len(alpha_levels) * len(power_levels) * len(effect_sizes) for n_structures in unique_structures)
 
     # Create a pool of processes
     num_processes = mp.cpu_count()
@@ -137,26 +141,35 @@ if __name__ == '__main__':
     adjusted_batch_size = adjust_batch_size(batch_size, available_memory_gb)
     print(f"Adjusted batch size: {adjusted_batch_size}")
 
-    for batch in tqdm(pool.imap(perform_power_analysis, param_combos, chunksize=adjusted_batch_size), desc='Performing power analysis', disable=False):
-        results.extend(batch)
+    completed_iterations = 0
 
-        if len(results) >= adjusted_batch_size:
-            # Write individual results to CSV
-            with open('individual_results.csv', 'a', newline='') as csvfile:
-                fieldnames = ['Skew Scale', 'Structure ID', 'Unique Structures', 'Alpha', 'Power', 'Probability of Structure',
-                              'Expected Observations', 'Minimum Required Sample Size', 'Effect Size', 'Z-Score']
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    with tqdm(total=total_iterations, desc='Progress', unit='iteration') as pbar:
+        for batch in pool.imap(perform_power_analysis, param_combos, chunksize=adjusted_batch_size):
+            if isinstance(batch, dict):
+                results.append(batch)
+            else:
+                results.extend(batch)
 
-                if csvfile.tell() == 0:  # Write header only if the file is empty
-                    writer.writeheader()
-                writer.writerows(results)
+            completed_iterations += len(batch)
+            pbar.update(len(batch))
+            pbar.set_postfix({'Completed': f'{completed_iterations}/{total_iterations}', 'Percentage': f'{completed_iterations/total_iterations:.2%}'})
 
-            results = []  # Clear the results list for the next batch
+            if len(results) >= adjusted_batch_size:
+                # Write individual results to CSV
+                with open('individual_results.csv', 'a', newline='') as csvfile:
+                    fieldnames = ['Skew Scale', 'Structure ID', 'Unique Structures', 'Alpha', 'Power', 'Probability of Structure',
+                                  'Expected Observations', 'Minimum Required Sample Size', 'Effect Size', 'Z-Score']
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            # Check available memory and adjust batch size if necessary
-            available_memory_gb = get_available_memory()
-            adjusted_batch_size = adjust_batch_size(batch_size, available_memory_gb)
-            print(f"Adjusted batch size: {adjusted_batch_size}")
+                    if csvfile.tell() == 0:  # Write header only if the file is empty
+                        writer.writeheader()
+                    writer.writerows(results)
+
+                results = []  # Clear the results list for the next batch
+
+                # Check available memory and adjust batch size if necessary
+                available_memory_gb = get_available_memory()
+                adjusted_batch_size = adjust_batch_size(batch_size, available_memory_gb)
 
     # Write any remaining results to CSV
     if results:
