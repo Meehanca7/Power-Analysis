@@ -8,7 +8,6 @@ import pandas as pd
 import multiprocessing as mp
 from tqdm import tqdm
 
-# Filter out convergence warnings from statsmodels.stats.power
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels.stats.power")
 
 def perform_power_analysis(params):
@@ -22,7 +21,8 @@ def perform_power_analysis(params):
     z_beta = norm.ppf(power_level)
 
     if expected_observations > 0:
-        min_required_sample_size = int(np.ceil((((z_alpha + z_beta) ** 2) * 2) / (effect_size ** 2 * expected_observations)))
+        min_required_sample_size = int(
+            np.ceil((((z_alpha + z_beta) ** 2) * 2) / (effect_size ** 2 * expected_observations)))
     else:
         min_required_sample_size = float('inf')  # Set to infinity if expected observations are zero or very small
 
@@ -31,16 +31,15 @@ def perform_power_analysis(params):
 
     return {
         'Skew Scale': skew_scale,
-        'Structure ID': structure_id,
         'Unique Structures': n_structures,
         'Alpha': alpha_level,
         'Power': power_level,
-        'Probability of Structure': prob_structure,
-        'Expected Observations': expected_observations,
-        'Minimum Required Sample Size': min_required_sample_size,
         'Effect Size': effect_size,
+        'Minimum Required Sample Size': min_required_sample_size,
+        'Expected Observations': expected_observations,
         'Z-Score': z_score
     }
+
 
 def param_combinations(skew_scales, n_structures, alpha_levels, power_levels, total_reads, effect_sizes):
     combinations = []
@@ -55,46 +54,69 @@ def param_combinations(skew_scales, n_structures, alpha_levels, power_levels, to
             for alpha_level in alpha_levels:
                 for power_level in power_levels:
                     for effect_size in effect_sizes:
-                        combinations.append((skew_scale, n_structures, structure_id, alpha_level, power_level, prob_structure, total_reads, effect_size))
+                        combinations.append((skew_scale, n_structures, structure_id, alpha_level, power_level,
+                                             prob_structure, total_reads, effect_size))
     return combinations
 
+
 def aggregate_results(results):
-    aggregate_results = []
-    sorted_results = sorted(results, key=lambda x: x['Structure ID'])
+    aggregated_results = []
 
-    # Calculate percentiles for minimum required sample size, expected observations, and z-score
-    percentiles = [5, 25, 50, 75, 95, 100]
-    min_required_sample_size_percentiles = np.percentile([r['Minimum Required Sample Size'] for r in sorted_results], percentiles)
-    expected_observations_percentiles = np.percentile([r['Expected Observations'] for r in sorted_results], percentiles)
-    z_score_percentiles = np.percentile([r['Z-Score'] for r in sorted_results], percentiles)
+    # Group results by unique parameter combinations
+    grouped_results = {}
+    for result in results:
+        key = (
+        result['Skew Scale'], result['Unique Structures'], result['Alpha'], result['Power'], result['Effect Size'])
+        if key not in grouped_results:
+            grouped_results[key] = []
+        grouped_results[key].append(
+            (result['Minimum Required Sample Size'], result['Expected Observations'], result['Z-Score']))
 
-    aggregate_result = {
-        'Skew Scale': sorted_results[0]['Skew Scale'],
-        'Unique Structures': sorted_results[0]['Unique Structures'],
-        'Alpha': sorted_results[0]['Alpha'],
-        'Power': sorted_results[0]['Power'],
-        'Effect Size': sorted_results[0]['Effect Size'],
-        'Min Required Sample Size 5th Percentile': min_required_sample_size_percentiles[0],
-        'Min Required Sample Size 25th Percentile': min_required_sample_size_percentiles[1],
-        'Min Required Sample Size 50th Percentile': min_required_sample_size_percentiles[2],
-        'Min Required Sample Size 75th Percentile': min_required_sample_size_percentiles[3],
-        'Min Required Sample Size 95th Percentile': min_required_sample_size_percentiles[4],
-        'Min Required Sample Size 100th Percentile': min_required_sample_size_percentiles[5],
-        'Expected Observations 5th Percentile': expected_observations_percentiles[0],
-        'Expected Observations 25th Percentile': expected_observations_percentiles[1],
-        'Expected Observations 50th Percentile': expected_observations_percentiles[2],
-        'Expected Observations 75th Percentile': expected_observations_percentiles[3],
-        'Expected Observations 95th Percentile': expected_observations_percentiles[4],
-        'Z-Score 5th Percentile': z_score_percentiles[0],
-        'Z-Score 25th Percentile': z_score_percentiles[1],
-        'Z-Score 50th Percentile': z_score_percentiles[2],
-        'Z-Score 75th Percentile': z_score_percentiles[3],
-        'Z-Score 95th Percentile': z_score_percentiles[4]
-    }
+    # Calculate average and percentiles for each unique parameter combination
+    for key, values in grouped_results.items():
+        skew_scale, n_structures, alpha_level, power_level, effect_size = key
+        min_required_sample_sizes, expected_observations, z_scores = zip(*values)
 
-    aggregate_results.append(aggregate_result)
+        avg_min_required_sample_size = np.mean([size for size in min_required_sample_sizes if size != float('inf')])
+        avg_expected_observations = np.mean(expected_observations)
+        avg_z_score = np.mean(z_scores)
 
-    return aggregate_results
+        percentiles = [5, 25, 50, 75, 95, 100]
+        min_required_sample_size_percentiles = np.percentile(
+            [size for size in min_required_sample_sizes if size != float('inf')], percentiles)
+        expected_observations_percentiles = np.percentile(expected_observations, percentiles)
+        z_score_percentiles = np.percentile(z_scores, percentiles)
+
+        aggregated_result = {
+            'Skew Scale': skew_scale,
+            'Unique Structures': n_structures,
+            'Alpha': alpha_level,
+            'Power': power_level,
+            'Effect Size': effect_size,
+            'Average Minimum Required Sample Size': avg_min_required_sample_size,
+            'Min Required Sample Size 5th Percentile': min_required_sample_size_percentiles[0],
+            'Min Required Sample Size 25th Percentile': min_required_sample_size_percentiles[1],
+            'Min Required Sample Size 50th Percentile': min_required_sample_size_percentiles[2],
+            'Min Required Sample Size 75th Percentile': min_required_sample_size_percentiles[3],
+            'Min Required Sample Size 95th Percentile': min_required_sample_size_percentiles[4],
+            'Min Required Sample Size 100th Percentile': min_required_sample_size_percentiles[5],
+            'Average Expected Observations': avg_expected_observations,
+            'Expected Observations 5th Percentile': expected_observations_percentiles[0],
+            'Expected Observations 25th Percentile': expected_observations_percentiles[1],
+            'Expected Observations 50th Percentile': expected_observations_percentiles[2],
+            'Expected Observations 75th Percentile': expected_observations_percentiles[3],
+            'Expected Observations 95th Percentile': expected_observations_percentiles[4],
+            'Average Z-Score': avg_z_score,
+            'Z-Score 5th Percentile': z_score_percentiles[0],
+            'Z-Score 25th Percentile': z_score_percentiles[1],
+            'Z-Score 50th Percentile': z_score_percentiles[2],
+            'Z-Score 75th Percentile': z_score_percentiles[3],
+            'Z-Score 95th Percentile': z_score_percentiles[4]
+        }
+        aggregated_results.append(aggregated_result)
+
+    return aggregated_results
+
 
 def worker(n_structures, skew_scales, alpha_levels, power_levels, total_reads, effect_sizes):
     # Generate parameter combinations for the current number of structures
@@ -111,15 +133,16 @@ def worker(n_structures, skew_scales, alpha_levels, power_levels, total_reads, e
 
     return aggregated_results
 
+
 if __name__ == '__main__':
     total_reads = 1e7  # 10 million observations
     total_possible_structures = 16.8e6  # 16.8 million possible structures
 
     skew_scales = [1, 2, 5, 10, 50, 100, 500, 1000]
-    unique_structures = [1000, 5000, 10000, 25000, 50000, 100000, 125000, 150000, 200000, 250000, 300000]
+    unique_structures = [1000, 5000, 25000, 50000, 100000, 125000, 150000, 200000, 250000, 300000]
     alpha_levels = [0.01, 0.05]
     power_levels = [0.8, 0.9]
-    effect_sizes = [0.5, 1, 2, 5, 10, 100, 1000]  # Specify the desired effect size
+    effect_sizes = [0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 10, 25]
 
     print("Starting power analysis...")
 
@@ -128,7 +151,9 @@ if __name__ == '__main__':
     pool = mp.Pool(processes=num_processes)
 
     # Process unique structures in parallel
-    results = pool.starmap(worker, [(n_structures, skew_scales, alpha_levels, power_levels, total_reads, effect_sizes) for n_structures in unique_structures])
+    results = pool.starmap(worker,
+                           [(n_structures, skew_scales, alpha_levels, power_levels, total_reads, effect_sizes) for
+                            n_structures in unique_structures])
 
     # Flatten the results
     aggregated_results = [result for sub_results in results for result in sub_results]
@@ -138,15 +163,19 @@ if __name__ == '__main__':
     print("Writing aggregated results to CSV...")
     # Write aggregated results to CSV
     import csv
+
     output_filename = "aggregated_results.csv"
     with open(output_filename, 'w', newline='') as csvfile:
         fieldnames = ['Skew Scale', 'Unique Structures', 'Alpha', 'Power', 'Effect Size',
+                      'Average Minimum Required Sample Size',
                       'Min Required Sample Size 5th Percentile', 'Min Required Sample Size 25th Percentile',
                       'Min Required Sample Size 50th Percentile', 'Min Required Sample Size 75th Percentile',
                       'Min Required Sample Size 95th Percentile', 'Min Required Sample Size 100th Percentile',
+                      'Average Expected Observations',
                       'Expected Observations 5th Percentile', 'Expected Observations 25th Percentile',
                       'Expected Observations 50th Percentile', 'Expected Observations 75th Percentile',
                       'Expected Observations 95th Percentile',
+                      'Average Z-Score',
                       'Z-Score 5th Percentile', 'Z-Score 25th Percentile',
                       'Z-Score 50th Percentile', 'Z-Score 75th Percentile', 'Z-Score 95th Percentile']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
