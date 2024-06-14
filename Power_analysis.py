@@ -144,7 +144,7 @@ if __name__ == '__main__':
     unique_structures = [1000, 5000, 25000, 50000, 100000, 125000, 150000, 200000, 250000, 300000]
     alpha_levels = [0.01, 0.05]
     power_levels = [0.8, 0.9]
-    effect_sizes = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    effect_sizes = [0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 10, 25]
 
     print("Starting power analysis...")
 
