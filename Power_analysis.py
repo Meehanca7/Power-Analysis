@@ -141,7 +141,7 @@ if __name__ == '__main__':
     total_possible_structures = 16.8e6  # 16.8 million possible structures
 
     skew_scales = [1, 2, 5, 10, 50, 100, 500, 1000]
-    unique_structures = [1000, 2000]
+    unique_structures = [1000, 5000, 25000, 50000, 100000, 125000, 150000, 200000, 250000, 300000]
     alpha_levels = [0.01, 0.05]
     power_levels = [0.8, 0.9]
     effect_sizes = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
