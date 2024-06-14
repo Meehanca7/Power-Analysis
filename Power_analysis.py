@@ -8,9 +8,7 @@ import pandas as pd
 import multiprocessing as mp
 from tqdm import tqdm
 
-# Filter out convergence warnings from statsmodels.stats.power
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="statsmodels.stats.power")
-
 
 def perform_power_analysis(params):
     skew_scale, n_structures, structure_id, alpha_level, power_level, prob_structure, total_reads, effect_size = params
