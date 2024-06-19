@@ -78,15 +78,19 @@ def aggregate_results(results):
         total_reads, skew_scale, n_structures, alpha_level, power_level, effect_size = key
         min_required_sample_sizes, expected_observations, z_scores = zip(*values)
 
-        avg_min_required_sample_size = np.mean([size for size in min_required_sample_sizes if size != float('inf')])
-        avg_expected_observations = np.mean(expected_observations)
-        avg_z_score = np.mean(z_scores)
+        # Sort the lists based on expected observations (ascending order)
+        sorted_data = sorted(zip(expected_observations, min_required_sample_sizes, z_scores))
+        sorted_expected_observations, sorted_min_required_sample_sizes, sorted_z_scores = zip(*sorted_data)
 
-        percentiles = [5, 25, 50, 75, 95, 100]
+        avg_min_required_sample_size = np.mean([size for size in sorted_min_required_sample_sizes if size != float('inf')])
+        avg_expected_observations = np.mean(sorted_expected_observations)
+        avg_z_score = np.mean(sorted_z_scores)
+
+        percentiles = [5, 25, 50, 75, 95, 97.5, 99, 100]
         min_required_sample_size_percentiles = np.percentile(
-            [size for size in min_required_sample_sizes if size != float('inf')], percentiles)
-        expected_observations_percentiles = np.percentile(expected_observations, percentiles)
-        z_score_percentiles = np.percentile(z_scores, percentiles)
+            [size for size in sorted_min_required_sample_sizes if size != float('inf')], percentiles)
+        expected_observations_percentiles = np.percentile(sorted_expected_observations, percentiles)
+        z_score_percentiles = np.percentile(sorted_z_scores, percentiles)
 
         aggregated_result = {
             'Total Reads': total_reads,
@@ -101,19 +105,27 @@ def aggregate_results(results):
             'Min Required Sample Size 50th Percentile': min_required_sample_size_percentiles[2],
             'Min Required Sample Size 75th Percentile': min_required_sample_size_percentiles[3],
             'Min Required Sample Size 95th Percentile': min_required_sample_size_percentiles[4],
-            'Min Required Sample Size 100th Percentile': min_required_sample_size_percentiles[5],
+            'Min Required Sample Size 97.5th Percentile': min_required_sample_size_percentiles[5],
+            'Min Required Sample Size 99th Percentile': min_required_sample_size_percentiles[6],
+            'Min Required Sample Size 100th Percentile': min_required_sample_size_percentiles[7],
             'Average Expected Observations': avg_expected_observations,
             'Expected Observations 5th Percentile': expected_observations_percentiles[0],
             'Expected Observations 25th Percentile': expected_observations_percentiles[1],
             'Expected Observations 50th Percentile': expected_observations_percentiles[2],
             'Expected Observations 75th Percentile': expected_observations_percentiles[3],
             'Expected Observations 95th Percentile': expected_observations_percentiles[4],
+            'Expected Observations 97.5th Percentile': expected_observations_percentiles[5],
+            'Expected Observations 99th Percentile': expected_observations_percentiles[6],
+            'Expected Observations 100th Percentile': expected_observations_percentiles[7],
             'Average Z-Score': avg_z_score,
             'Z-Score 5th Percentile': z_score_percentiles[0],
             'Z-Score 25th Percentile': z_score_percentiles[1],
             'Z-Score 50th Percentile': z_score_percentiles[2],
             'Z-Score 75th Percentile': z_score_percentiles[3],
-            'Z-Score 95th Percentile': z_score_percentiles[4]
+            'Z-Score 95th Percentile': z_score_percentiles[4],
+            'Z-Score 97.5th Percentile': z_score_percentiles[5],
+            'Z-Score 99th Percentile': z_score_percentiles[6],
+            'Z-Score 100th Percentile': z_score_percentiles[7]
         }
         aggregated_results.append(aggregated_result)
 
@@ -140,8 +152,8 @@ if __name__ == '__main__':
     total_possible_structures = 16.8e6  # 16.8 million possible structures
 
     total_reads = [1e6, 5e6, 1e7, 5e7, 1e8]  # Multiple read counts
-    skew_scales = [1, 2, 5, 10, 15, 20, 25, 100]
-    unique_structures = [1000, 10000, 25000, 50000, 100000, 125000, 150000, 200000, 250000, 300000]
+    skew_scales = [1, 2, 5, 10, 15, 20]
+    unique_structures = [1000, 10000, 25000, 50000, 100000, 125000, 150000, 200000, 300000]
     alpha_levels = [0.05]
     power_levels = [0.8]
     effect_sizes = [0.1, 0.25, 0.5, 0.75, 1, 2.5, 5]
@@ -172,14 +184,17 @@ if __name__ == '__main__':
                       'Average Minimum Required Sample Size',
                       'Min Required Sample Size 5th Percentile', 'Min Required Sample Size 25th Percentile',
                       'Min Required Sample Size 50th Percentile', 'Min Required Sample Size 75th Percentile',
-                      'Min Required Sample Size 95th Percentile', 'Min Required Sample Size 100th Percentile',
+                      'Min Required Sample Size 95th Percentile', 'Min Required Sample Size 97.5th Percentile',
+                      'Min Required Sample Size 99th Percentile', 'Min Required Sample Size 100th Percentile',
                       'Average Expected Observations',
                       'Expected Observations 5th Percentile', 'Expected Observations 25th Percentile',
                       'Expected Observations 50th Percentile', 'Expected Observations 75th Percentile',
-                      'Expected Observations 95th Percentile',
+                      'Expected Observations 95th Percentile', 'Expected Observations 97.5th Percentile',
+                      'Expected Observations 99th Percentile', 'Expected Observations 100th Percentile',
                       'Average Z-Score',
                       'Z-Score 5th Percentile', 'Z-Score 25th Percentile',
-                      'Z-Score 50th Percentile', 'Z-Score 75th Percentile', 'Z-Score 95th Percentile']
+                      'Z-Score 50th Percentile', 'Z-Score 75th Percentile', 'Z-Score 95th Percentile',
+                      'Z-Score 97.5th Percentile', 'Z-Score 99th Percentile', 'Z-Score 100th Percentile']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         writer.writeheader()
