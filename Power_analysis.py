@@ -153,7 +153,7 @@ if __name__ == '__main__':
 
     total_reads = [1e6, 5e6, 1e7, 5e7, 1e8]  # Multiple read counts
     skew_scales = [1, 2, 5, 10, 15, 20]
-    unique_structures = [1000]
+    unique_structures = [1000,10000,50000,100000,125000,150000,175000,200000,250000,3000000]
     alpha_levels = [0.05]
     power_levels = [0.8]
     effect_sizes = [0.1, 0.25, 0.5, 0.75, 1, 2.5, 5]
